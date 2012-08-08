@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.apache.lucene</groupId>
+        <artifactId>lucene</artifactId>
+        <version>3.6.0</version>
+    </parent>
+    <groupId>org.apache.lucene</groupId>
+    <artifactId>lucene-benchmark</artifactId>
+    <name>Apache Lucene Benchmark</name>
+    <packaging>jar</packaging>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-highlighter</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analyzers</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-facet</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-test-framework</artifactId>
+            <version>3.6.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ibm.icu</groupId>
+            <artifactId>icu4j-core</artifactId>
+            <version>4.8.1.1</version>
+        </dependency>
+    </dependencies>
+    <profiles>
+      <profile>
+      <id>get-data</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>get-data</id>
+                        <phase>compile</phase>
+                        <configuration>
+                            <tasks>
+                                <property name="outdir" value="target/benchmark"/>
+                                <mkdir dir="${outdir}"/>
+                                <!-- get reuters -->
+                                <get src="http://www.daviddlewis.com/resources/testcollections/reuters21578/reuters21578.tar.gz"
+                                     dest="${outdir}/reuters21578.tar.gz"/>
+                                <gunzip src="${outdir}/reuters21578.tar.gz" dest="${outdir}"/>
+                                <untar src="${outdir}/reuters21578.tar" dest="${outdir}/reuters"/>
+                                <delete >
+                                    <fileset dir="${outdir}/reuters">
+                                        <include name="*.txt"/>
+                                    </fileset>
+                                </delete>
+                                <mkdir dir="${outdir}/reuters-out"/>
+                                <java classname="org.apache.lucene.benchmark.utils.ExtractReuters" maxmemory="1024M" fork="true">
+                                    <classpath refid="maven.compile.classpath"/>
+                                    <arg file="${outdir}/reuters"/>
+                                    <arg file="${outdir}/reuters-out"/>
+                                </java>
+                                <mkdir dir="target/trec-quality"/>                                        
+                                <!-- get news20-->
+                                <get src="http://www-2.cs.cmu.edu/afs/cs.cmu.edu/project/theo-20/www/data/news20.tar.gz"
+                                        dest="target/news20.tar.gz"/>
+                                <gunzip src="target/news20.tar.gz" dest="target"/>
+                                <untar src="target/news20.tar" dest="target"/>
+                                <!-- get 20news -->
+                                <get src="http://people.csail.mit.edu/jrennie/20Newsgroups/20news-18828.tar.gz"
+                                        dest="target/20news-18828.tar.gz"/>
+                                <gunzip src="target/20news-18828.tar.gz" dest="target"/>
+                                <untar src="target/20news-18828.tar" dest="target"/>
+                                <!-- get mini news -->
+                                <get src="http://kdd.ics.uci.edu/databases/20newsgroups/mini_newsgroups.tar.gz"
+                                        dest="target/mini_newsgroups.tar.gz"/>
+                                <gunzip src="target/mini_newsgroups.tar.gz" dest="target"/>
+                                <untar src="target/mini_newsgroups.tar" dest="target"/>
+                                <!-- get 100k words -->
+                                <get src="http://people.apache.org/~rmuir/wikipedia/top.100k.words.de.en.fr.uk.wikipedia.2009-11.tar.bz2"
+                            	         dest="target/top.100k.words.de.en.fr.uk.wikipedia.2009-11.tar.bz2"/>
+                                <untar src="target/top.100k.words.de.en.fr.uk.wikipedia.2009-11.tar.bz2" overwrite="true" compression="bzip2" dest="target"/>
+                            </tasks>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+      </build>
+      </profile>
+      <profile>
+      <id>get-wikipedia</id>
+      <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>get-wikipedia</id>
+                        <phase>compile</phase>
+                        <configuration>
+                            <tasks>
+                                <!-- get en-wiki-->
+                                <!-- get src="http://people.apache.org/~gsingers/wikipedia/enwiki-20070527-pages-articles.xml.bz2"
+                                        dest="target/enwiki-20070527-pages-articles.xml.bz2" -->
+                                <get src="http://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2"
+                                        dest="target/enwiki-20070527-pages-articles.xml.bz2"/>
+                            </tasks>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+      </build>
+      </profile>
+   </profiles>
+</project>
