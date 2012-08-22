@@ -5,13 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.apache.lucene</groupId>
     <artifactId>lucene</artifactId>
-    <version>3.6.0</version>
+    <version>3.6.1</version>
     <name>Apache Lucene</name>
     <packaging>pom</packaging>
     <properties>
-        <lucene.version>3.6</lucene.version>
+        <lucene.version>3.6.1</lucene.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>    
+    </properties>
     <build>
         <pluginManagement>
             <plugins>
@@ -23,8 +23,8 @@
                         <source>1.6</source>
                         <target>1.6</target>
                         <encoding>UTF-8</encoding>
-                        <meminitial>128m</meminitial>
-                        <maxmem>512m</maxmem>
+                        <meminitial>256m</meminitial>
+                        <maxmem>1024m</maxmem>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -52,7 +52,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.5</version>
+                    <version>2.12</version>
                     <configuration>
                         <skip>false</skip>
                         <forkMode>once</forkMode>

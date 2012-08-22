@@ -1,6 +1,6 @@
 package org.apache.lucene.search.suggest.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -37,18 +37,18 @@ import org.apache.lucene.util.PriorityQueue;
  * @lucene.internal
  */
 public final class Sort {
-  public final static int MB = 1024 * 1024;
-  public final static int GB = MB * 1024;
+  public final static long MB = 1024 * 1024;
+  public final static long GB = MB * 1024;
   
   /**
    * Minimum recommended buffer size for sorting.
    */
-  public final static int MIN_BUFFER_SIZE_MB = 32;
+  public final static long MIN_BUFFER_SIZE_MB = 32;
 
   /**
    * Absolute minimum required buffer size for sorting.
    */
-  public static final int ABSOLUTE_MIN_SORT_BUFFER_SIZE = MB / 2;
+  public static final long ABSOLUTE_MIN_SORT_BUFFER_SIZE = MB / 2;
   private static final String MIN_BUFFER_SIZE_MSG = "At least 0.5MB RAM buffer is needed";
 
   /**
@@ -60,7 +60,7 @@ public final class Sort {
    * A bit more descriptive unit for constructors.
    * 
    * @see #automatic()
-   * @see #megabytes(int)
+   * @see #megabytes(long)
    */
   public static final class BufferSize {
     final int bytes;
@@ -70,39 +70,53 @@ public final class Sort {
         throw new IllegalArgumentException("Buffer too large for Java ("
             + (Integer.MAX_VALUE / MB) + "mb max): " + bytes);
       }
+      
+      if (bytes < ABSOLUTE_MIN_SORT_BUFFER_SIZE) {
+        throw new IllegalArgumentException(MIN_BUFFER_SIZE_MSG + ": " + bytes);
+      }
   
       this.bytes = (int) bytes;
     }
-  
-    public static BufferSize megabytes(int mb) {
+    
+    /**
+     * Creates a {@link BufferSize} in MB. The given 
+     * values must be $gt; 0 and &lt; 2048.
+     */
+    public static BufferSize megabytes(long mb) {
       return new BufferSize(mb * MB);
     }
   
     /** 
      * Approximately half of the currently available free heap, but no less
-     * than {@link #MIN_BUFFER_SIZE_MB}. However if current heap allocation 
-     * is insufficient for sorting consult with max allowed heap size. 
+     * than {@link #ABSOLUTE_MIN_SORT_BUFFER_SIZE}. However if current heap allocation 
+     * is insufficient or if there is a large portion of unallocated heap-space available 
+     * for sorting consult with max allowed heap size. 
      */
     public static BufferSize automatic() {
       Runtime rt = Runtime.getRuntime();
       
       // take sizes in "conservative" order
-      long max = rt.maxMemory();
-      long total = rt.totalMemory();
-      long free = rt.freeMemory();
-
-      // by free mem (attempting to not grow the heap for this)
-      long half = free/2;
-      if (half >= ABSOLUTE_MIN_SORT_BUFFER_SIZE) { 
-        return new BufferSize(Math.min(MIN_BUFFER_SIZE_MB * MB, half));
-      }
+      final long max = rt.maxMemory(); // max allocated
+      final long total = rt.totalMemory(); // currently allocated
+      final long free = rt.freeMemory(); // unused portion of currently allocated
+      final long totalAvailableBytes = max - total + free;
       
-      // by max mem (heap will grow)
-      half = (max - total) / 2;
-      return new BufferSize(Math.min(MIN_BUFFER_SIZE_MB * MB, half));
+      // by free mem (attempting to not grow the heap for this)
+      long sortBufferByteSize = free/2;
+      final long minBufferSizeBytes = MIN_BUFFER_SIZE_MB*MB;
+      if (sortBufferByteSize <  minBufferSizeBytes
+          || totalAvailableBytes > 10 * minBufferSizeBytes) { // lets see if we need/should to grow the heap 
+        if (totalAvailableBytes/2 > minBufferSizeBytes){ // there is enough mem for a reasonable buffer
+          sortBufferByteSize = totalAvailableBytes/2; // grow the heap
+        } else {
+          //heap seems smallish lets be conservative fall back to the free/2 
+          sortBufferByteSize = Math.max(ABSOLUTE_MIN_SORT_BUFFER_SIZE, sortBufferByteSize);
+        }
+      }
+      return new BufferSize(Math.min((long)Integer.MAX_VALUE, sortBufferByteSize));
     }
   }
-
+  
   /**
    * Sort info (debugging mostly).
    */
@@ -179,47 +193,59 @@ public final class Sort {
     output.delete();
 
     ArrayList<File> merges = new ArrayList<File>();
-    ByteSequencesReader is = new ByteSequencesReader(input);
-    boolean success = false;
+    boolean success2 = false;
     try {
-      int lines = 0;
-      while ((lines = readPartition(is)) > 0) {                    
-        merges.add(sortPartition(lines));
-        sortInfo.tempMergeFiles++;
-        sortInfo.lines += lines;
-
-        // Handle intermediate merges.
-        if (merges.size() == maxTempFiles) {
-          File intermediate = File.createTempFile("sort", "intermediate", tempDirectory);
-          mergePartitions(merges, intermediate);
-          for (File file : merges) {
-            file.delete();
-          }
-          merges.clear();
-          merges.add(intermediate);
+      ByteSequencesReader is = new ByteSequencesReader(input);
+      boolean success = false;
+      try {
+        int lines = 0;
+        while ((lines = readPartition(is)) > 0) {
+          merges.add(sortPartition(lines));
           sortInfo.tempMergeFiles++;
-        }
-      }
-      success = true;
-    } finally {
-      if (success)
-        IOUtils.close(is);
-      else
-        IOUtils.closeWhileHandlingException(is);
-    }
+          sortInfo.lines += lines;
 
-    // One partition, try to rename or copy if unsuccessful.
-    if (merges.size() == 1) {     
-      // If simple rename doesn't work this means the output is
-      // on a different volume or something. Copy the input then.
-      if (!merges.get(0).renameTo(output)) {
-        copy(merges.get(0), output);
+          // Handle intermediate merges.
+          if (merges.size() == maxTempFiles) {
+            File intermediate = File.createTempFile("sort", "intermediate", tempDirectory);
+            try {
+              mergePartitions(merges, intermediate);
+            } finally {
+              for (File file : merges) {
+                file.delete();
+              }
+              merges.clear();
+              merges.add(intermediate);
+            }
+            sortInfo.tempMergeFiles++;
+          }
+        }
+        success = true;
+      } finally {
+        if (success)
+          IOUtils.close(is);
+        else
+          IOUtils.closeWhileHandlingException(is);
       }
-    } else { 
-      // otherwise merge the partitions with a priority queue.                  
-      mergePartitions(merges, output);                            
+
+      // One partition, try to rename or copy if unsuccessful.
+      if (merges.size() == 1) {     
+        File single = merges.get(0);
+        // If simple rename doesn't work this means the output is
+        // on a different volume or something. Copy the input then.
+        if (!single.renameTo(output)) {
+          copy(single, output);
+        }
+      } else { 
+        // otherwise merge the partitions with a priority queue.
+        mergePartitions(merges, output);
+      }
+      success2 = true;
+    } finally {
       for (File file : merges) {
         file.delete();
+      }
+      if (!success2) {
+        output.delete();
       }
     }
 
